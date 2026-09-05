@@ -4,4 +4,4 @@ Working repository for market screening and research notes.
 
 ## Contents
 
-- `chartink/`: Chartink scanner clauses, with syntax notes and verification steps.
+- `chartink/`: the scan, as a Chartink clause and as a runnable Python screener.

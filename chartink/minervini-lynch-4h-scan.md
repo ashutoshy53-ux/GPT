@@ -9,6 +9,10 @@ conventions but have not been executed against Chartink's parser. Verify each
 block inside the scan builder before relying on the output. See
 [Verification checklist](#verification-checklist).
 
+If you would rather run the screen than trust an unverified clause,
+`screener.py` in this directory implements the same logic against Yahoo
+Finance. See [Running the screen locally](#9-running-the-screen-locally).
+
 ## 1. Syntax conventions used
 
 Chartink offset notation differs between daily and intraday scans, and getting
@@ -152,3 +156,52 @@ Syntax conventions were taken from Chartink's scanner documentation and
 published community scans. Chartink was not reachable from the environment in
 which this file was written, so the offset and field-name conventions are drawn
 from secondary references and are flagged above where confidence is lower.
+
+## 9. Running the screen locally
+
+`screener.py` implements the same three filters against Yahoo Finance, so the
+output can be checked against a chart rather than taken on trust.
+
+```
+pip install yfinance pandas
+python screener.py --universe nifty500.csv --out results.csv
+```
+
+The universe file is one NSE symbol per line without the `.NS` suffix. A
+`Symbol` header is tolerated, so NSE's published constituent CSV can be passed
+directly. Useful flags:
+
+- `--limit 25` screens a short slice first, which is the sane way to confirm
+  the pipeline works before committing to a few hundred network round trips.
+- `--skip-fundamentals` runs the technical screen alone. Worth using once,
+  because Yahoo's fundamental coverage of Indian mid and small caps is thin and
+  a missing field is silently treated as a failure otherwise.
+
+### What was tested
+
+The pure logic was exercised against synthetic bars: 4-hour grouping produces
+two candles per NSE session with correct open, high, low and close
+aggregation and no candle straddling a day boundary; the crossover detector
+fires on the crossing candle and not the one after it, and returns false on a
+pure downtrend and on a series too short to seed the slow EMA; the trend
+template accepts a clean uptrend and rejects a downtrend, a short series, and a
+stock only 10 percent off its 52-week low.
+
+What was not tested is the live path. Every market data host is blocked at the
+network policy layer in the environment where this was written, so no call to
+Yahoo has been made. Expect to fix small things on first run.
+
+### Where this differs from Chartink
+
+- **4-hour candles are constructed, not fetched.** NSE trades a 6h15m session,
+  which yields seven hourly bars and therefore one full 4-hour candle plus a
+  2h15m tail. Chartink builds its 4-hour bars its own way, so the two will
+  disagree on the exact crossover date for some names.
+- **RS rating is omitted rather than approximated.** Minervini's eighth
+  condition has no equivalent in price data alone, and a silent proxy would be
+  worse than its absence.
+- **Fundamentals come from Yahoo, not Chartink.** Yahoo reports debt-to-equity
+  as a percentage, which the script divides by 100, and falls back from
+  `earningsGrowth` to `earningsQuarterlyGrowth` when the annual figure is
+  absent. These are different underlying numbers, so the fundamental filter is
+  comparable in intent but not identical in effect.
